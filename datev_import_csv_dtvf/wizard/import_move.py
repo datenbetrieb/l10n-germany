@@ -5,7 +5,8 @@
 import base64
 import csv
 import logging
-from datetime import date as datelib, datetime
+from datetime import date as datelib
+from datetime import datetime
 
 import chardet
 
@@ -258,8 +259,8 @@ class AccountMoveImport(models.TransientModel):
                 for code, account_id in speed_dict.items():
                     if code.startswith(line[code_field]):
                         _logger.warning(
-                            "Approximate match: import account %s has been matched "
-                            "with Odoo account %s" % (line[code_field], code)
+                            "Approximate match: import account {} has been matched "
+                            "with Odoo account {}".format(line[code_field], code)
                         )
                         line[id_field] = account_id
                         break
@@ -329,11 +330,9 @@ class AccountMoveImport(models.TransientModel):
                     "label": label,
                     "codes": "\n".join(
                         [
-                            "- %(code)s : line(s) %(lines)s"
-                            % {
-                                "code": code,
-                                "lines": ", ".join([str(i) for i in lines]),
-                            }
+                            "- {} : line(s) {}".format(
+                                code, ", ".join([str(i) for i in lines])
+                            )
                             for (code, lines) in errors[key].items()
                         ]
                     ),
@@ -428,7 +427,7 @@ class AccountMoveImport(models.TransientModel):
             {
                 "name": pivot_line["name"],
                 "account_id": pivot_line["account_id"],
-                "import_external_id": "%s-%s" % (sequence, pivot_line.get("line")),
+                "import_external_id": "{}-{}".format(sequence, pivot_line.get("line")),
                 "indicator": indicator,
                 "analytic_distribution": {
                     pivot_line.get(analytic_account_id_field): 100.0
@@ -469,7 +468,7 @@ class AccountMoveImport(models.TransientModel):
             {
                 "name": pivot_line["name"],
                 "account_id": pivot_line["contra_account_id"],
-                "import_external_id": "%s-%s" % (sequence, pivot_line.get("line")),
+                "import_external_id": "{}-{}".format(sequence, pivot_line.get("line")),
                 "indicator": indicator,
                 "analytic_distribution": {
                     pivot_line.get(analytic_account_id_field): 100.0
