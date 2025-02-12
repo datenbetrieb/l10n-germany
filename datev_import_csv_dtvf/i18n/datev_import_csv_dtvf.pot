@@ -4,7 +4,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Odoo Server 16.0\n"
+"Project-Id-Version: Odoo Server 17.0\n"
 "Report-Msgid-Bugs-To: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -214,11 +214,6 @@ msgstr ""
 #. module: datev_import_csv_dtvf
 #: model_terms:ir.ui.view,arch_db:datev_import_csv_dtvf.account_move_import_form
 msgid "Konto"
-msgstr ""
-
-#. module: datev_import_csv_dtvf
-#: model:ir.model.fields,field_description:datev_import_csv_dtvf.field_account_move_import____last_update
-msgid "Last Modified on"
 msgstr ""
 
 #. module: datev_import_csv_dtvf
