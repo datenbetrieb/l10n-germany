@@ -10,7 +10,7 @@ from datetime import datetime
 
 import chardet
 
-from odoo import _, fields, models
+from odoo import fields, models
 from odoo.exceptions import UserError
 from odoo.tools import float_is_zero
 
@@ -259,8 +259,9 @@ class AccountMoveImport(models.TransientModel):
                 for code, account_id in speed_dict.items():
                     if code.startswith(line[code_field]):
                         _logger.warning(
-                            "Approximate match: import account {} has been matched "
-                            "with Odoo account {}".format(line[code_field], code)
+                            f"Approximate match: import account {line[code_field]} "
+                            "has been matched "
+                            f"with Odoo account {code}"
                         )
                         line[id_field] = account_id
                         break
@@ -283,10 +284,12 @@ class AccountMoveImport(models.TransientModel):
                 errors["journal"].setdefault(l["journal"], []).append(l["line"])
             # 4. name
             if not l.get("name"):
-                errors["other"].append(_("Line %d: missing label.") % l["line"])
+                errors["other"].append(
+                    self.env._("Line %d: missing label.") % l["line"]
+                )
             # 5. date
             if not l.get("date"):
-                errors["other"].append(_("Line %d: missing date.") % l["line"])
+                errors["other"].append(self.env._("Line %d: missing date.") % l["line"])
             else:
                 if not isinstance(l.get("date"), datelib):
                     try:
@@ -339,7 +342,7 @@ class AccountMoveImport(models.TransientModel):
                 }
         if errors["other"]:
             msg += _("List of misc errors:\n%s") % (
-                "\n".join(["- %s" % e for e in errors["other"]])
+                "\n".join([f"- {e}" for e in errors["other"]])
             )
         if msg:
             raise UserError(msg)
@@ -399,7 +402,7 @@ class AccountMoveImport(models.TransientModel):
         rmoves = self.env["account.move"]
         for move in moves:
             rmoves += amo.create(move)
-        _logger.info("Account moves IDs %s created via file import" % rmoves.ids)
+        _logger.info(f"Account moves IDs {rmoves.ids} created via file import")
         if post:
             rmoves._post()
         return rmoves

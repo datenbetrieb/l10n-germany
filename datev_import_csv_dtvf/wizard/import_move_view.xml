@@ -34,21 +34,21 @@
                             <em>Columns</em>
                             :
                             <ol>
-                                <li>Umsatz (ohne Soll/Haben-Kz)</li>
-                                <li>Soll/Haben-Kennzeichen</li>
-                                <li />
-                                <li />
-                                <li />
-                                <li />
-                                <li>Konto</li>
-                                <li>Gegenkonto (ohne BU-Schl?ssel)</li>
-                                <li />
-                                <li>Belegdatum (DDMM)</li>
-                                <li />
-                                <li />
-                                <li />
-                                <li>Buchungstext</li>
-                            </ol>
+                            <li>Umsatz (ohne Soll/Haben-Kz)</li>
+                            <li>Soll/Haben-Kennzeichen</li>
+                            <li />
+                            <li />
+                            <li />
+                            <li />
+                            <li>Konto</li>
+                            <li>Gegenkonto (ohne BU-Schl?ssel)</li>
+                            <li />
+                            <li>Belegdatum (DDMM)</li>
+                            <li />
+                            <li />
+                            <li />
+                            <li>Buchungstext</li>
+                        </ol>
                         </li>
                         <li>
                             <em>Field separator</em>
@@ -94,5 +94,4 @@
         action="account_move_import_action"
         sequence="150"
     />
-
 </odoo>
