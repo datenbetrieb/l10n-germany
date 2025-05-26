@@ -212,7 +212,11 @@ class AccountMoveImport(models.TransientModel):
         acc_speed_dict = {
             account["code"].upper(): account["id"]
             for account in self.env["account.account"].search_read(
-                [("company_id", "=", company_id), ("deprecated", "=", False)], ["code"]
+                [
+                    ("company_ids", "any", [("id", "=", company_id)]),
+                    ("deprecated", "=", False),
+                ],
+                ["code"],
             )
         }
         # contra_account

@@ -73,7 +73,7 @@ class TestDatevImportCsvDtvf(TransactionCase):
             if self.env["account.account"].search(
                 [
                     ("code", "=", code),
-                    ("company_id", "=", self.env.company.id),
+                    ("company_ids", "any", [("id", "=", self.env.company.id)]),
                 ]
             ):
                 continue
