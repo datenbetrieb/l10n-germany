@@ -1,83 +1,33 @@
 # Copyright 2023 Hunki Enterprises BV
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+import logging
 from base64 import b64encode
 
 from odoo import exceptions
-from odoo.tests import TransactionCase
+from odoo.tests import tagged
 from odoo.tools.misc import file_open
 
+from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 
-class TestDatevImportCsvDtvf(TransactionCase):
-    def setUp(self):
-        super().setUp()
-        for code in (
-            "0731",
-            "0980",
-            "0996",
-            "1200",
-            "1202",
-            "1240",
-            "1360",
-            "1500",
-            "1590",
-            "1610",
-            "1740",
-            "1750",
-            "1780",
-            "1789",
-            "1790",
-            "2712",
-            "2735",
-            "4110",
-            "4138",
-            "4160",
-            "4167",
-            "4360",
-            "4510",
-            "4520",
-            "4580",
-            "4650",
-            "4651",
-            "4900",
-            "4930",
-            "8125",
-            "8200",
-            "8339",
-            "8977",
-            "0965",
-            "0974",
-            "1200",
-            "1502",
-            "1503",
-            "1545",
-            "1576",
-            "1588",
-            "1700",
-            "1741",
-            "2114",
-            "2150",
-            "2450",
-            "2709",
-            "3425",
-            "3435",
-            "4120",
-            "4170",
-            "4653",
-            "4654",
-            "4655",
-            "4663",
-            "4666",
-            "7095",
-            "8605",
-        ):
-            if self.env["account.account"].search(
-                [
-                    ("code", "=", code),
-                    ("company_ids", "any", [("id", "=", self.env.company.id)]),
-                ]
-            ):
-                continue
-            self.env["account.account"].create(
+_logger = logging.getLogger(__name__)
+
+
+@tagged("post_install_l10n", "post_install", "-at_install")
+class TestDatevImportCsvDtvf(AccountTestInvoicingCommon):
+    @classmethod
+    @AccountTestInvoicingCommon.setup_country("de")
+    @AccountTestInvoicingCommon.setup_chart_template("de_skr03")
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.partner = cls.env["res.partner"].create(
+            {
+                "name": "l10n_germany_skr03",
+                "country_id": cls.env.ref("base.de").id,
+            }
+        )
+        for code in ("1200",):
+            _logger.info(f"create account {code} for test")
+            cls.env["account.account"].create(
                 {
                     "name": code,
                     "code": code,
@@ -85,24 +35,23 @@ class TestDatevImportCsvDtvf(TransactionCase):
                     "reconcile": True,
                 }
             )
-        self.env["account.account"].search([("code", "=", "7095")]).code = "7095000"
-        self.env["account.account"].search([("code", "=", "1700")]).code = "170"
-        self.env["account.account"].search(
-            [("code", "=", "4900")]
-        ).account_type = "income"
+        # cls.env["account.account"].search(
+        #     [("code", "=", "4900")]
+        # ).account_type = "income"
         for code in ("4811",):
-            if self.env["account.analytic.account"].search(
+            if cls.env["account.analytic.account"].search(
                 [
                     ("code", "=", code),
-                    ("company_id", "=", self.env.company.id),
+                    ("company_id", "=", cls.env.company.id),
                 ]
             ):
                 continue
-            self.env["account.analytic.account"].create(
+            _logger.info(f"create analytic.account {code} for test")
+            cls.env["account.analytic.account"].create(
                 {
                     "name": code,
                     "code": code,
-                    "plan_id": self.env.ref("analytic.analytic_plan_internal").id,
+                    "plan_id": cls.env.ref("analytic.analytic_plan_internal").id,
                 }
             )
 
