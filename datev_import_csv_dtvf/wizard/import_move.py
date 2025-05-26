@@ -56,7 +56,7 @@ class AccountMoveImport(models.TransientModel):
         self.update_pivot(pivot)
         moves = self.create_moves_from_pivot(pivot, post=self.post_move)
         action = {
-            "name": _("Imported Journal Entries"),
+            "name": self.env._("Imported Journal Entries"),
             "res_model": "account.move",
             "type": "ir.actions.act_window",
             "nodestroy": False,
@@ -177,7 +177,7 @@ class AccountMoveImport(models.TransientModel):
                 except Exception as error:
                     raise UserError(
                         (
-                            _(
+                            self.env._(
                                 "time data : '%(date)s' in line %(number)s does not "
                                 "match format '%(format)s"
                             )
@@ -234,11 +234,11 @@ class AccountMoveImport(models.TransientModel):
             )
         }
         key2label = {
-            "account": _("account codes"),
-            "contra_account": _("contra account codes"),
-            "journal": _("journal codes"),
-            "analytic_account_1": _("analytic account codes"),
-            "analytic_account_2": _("analytic account codes"),
+            "account": self.env._("account codes"),
+            "contra_account": self.env._("contra account codes"),
+            "journal": self.env._("journal codes"),
+            "analytic_account_1": self.env._("analytic account codes"),
+            "analytic_account_2": self.env._("analytic account codes"),
         }
         errors = {"other": []}
         for key in key2label.keys():
@@ -296,17 +296,17 @@ class AccountMoveImport(models.TransientModel):
                         l["date"] = datetime.strptime(l["date"], "%Y-%m-%d")
                     except Exception:
                         errors["other"].append(
-                            _("Line %(line)d: bad date format %(date)s") % l
+                            self.env._("Line %(line)d: bad date format %(date)s") % l
                         )
             # 6. credit
             if not isinstance(l.get("credit"), float):
                 errors["other"].append(
-                    _("Line %(line)d: bad value for credit (%(credit)s).") % l
+                    self.env._("Line %(line)d: bad value for credit (%(credit)s).") % l
                 )
             # 7. debit
             if not isinstance(l.get("debit"), float):
                 errors["other"].append(
-                    _("Line %(line)d: bad value for debit (%(debit)s).") % l
+                    self.env._("Line %(line)d: bad value for debit (%(debit)s).") % l
                 )
             if l["analytic_account_1"]:
                 match_account(
@@ -327,7 +327,7 @@ class AccountMoveImport(models.TransientModel):
         msg = ""
         for key, label in key2label.items():
             if errors[key]:
-                msg += _(
+                msg += self.env._(
                     "List of %(label)s that don't exist in Odoo:\n%(codes)s\n\n"
                 ) % {
                     "label": label,
@@ -341,7 +341,7 @@ class AccountMoveImport(models.TransientModel):
                     ),
                 }
         if errors["other"]:
-            msg += _("List of misc errors:\n%s") % (
+            msg += self.env._("List of misc errors:\n%s") % (
                 "\n".join([f"- {e}" for e in errors["other"]])
             )
         if msg:
@@ -366,7 +366,7 @@ class AccountMoveImport(models.TransientModel):
                 # new move
                 if moves and not float_is_zero(cur_balance, precision_rounding=prec):
                     raise UserError(
-                        _(
+                        self.env._(
                             "The journal entry that ends on line %(line)d is not "
                             "balanced (balance is %(balance)s)."
                         )
@@ -375,7 +375,7 @@ class AccountMoveImport(models.TransientModel):
                 if cur_move:
                     if len(cur_move["line_ids"]) <= 1:
                         raise UserError(
-                            _(
+                            self.env._(
                                 "move should have more than 1 line num: %(line)s,"
                                 "data : %(lines)s"
                             )
@@ -393,7 +393,7 @@ class AccountMoveImport(models.TransientModel):
             moves.append(cur_move)
         if not float_is_zero(cur_balance, precision_rounding=prec):
             raise UserError(
-                _(
+                self.env._(
                     "The journal entry that ends on the last line is not "
                     "balanced (balance is %s)."
                 )
