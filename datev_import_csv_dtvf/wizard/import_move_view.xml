@@ -90,7 +90,7 @@
 
     <menuitem
         id="account_move_import_menu"
-        parent="account.menu_finance_entries_actions"
+        parent="account.menu_finance_entries"
         action="account_move_import_action"
         sequence="150"
     />
