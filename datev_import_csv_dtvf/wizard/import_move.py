@@ -274,9 +274,9 @@ class AccountMoveImport(models.TransientModel):
 
         # MATCHES + CHECKS
         for l in pivot:  # noqa: E741
-            assert l.get("line") and isinstance(
-                l.get("line"), int
-            ), "missing line number"
+            assert l.get("line") and isinstance(l.get("line"), int), (
+                "missing line number"
+            )
             # 1. account
             match_account(l, acc_speed_dict, "account_id", "account")
             # 2. contra_account
