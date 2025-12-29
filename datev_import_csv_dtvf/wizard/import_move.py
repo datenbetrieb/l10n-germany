@@ -12,6 +12,7 @@ import chardet
 
 from odoo import fields, models
 from odoo.exceptions import UserError
+from odoo.fields import Domain
 from odoo.tools import float_is_zero
 
 _logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ class AccountMoveImport(models.TransientModel):
             action.update(
                 {
                     "view_mode": "list,form",
-                    "domain": [("id", "in", moves.ids)],
+                    "domain": Domain("id", "in", moves.ids),
                 }
             )
         return action
@@ -212,10 +213,12 @@ class AccountMoveImport(models.TransientModel):
         acc_speed_dict = {
             account["code"].upper(): account["id"]
             for account in self.env["account.account"].search_read(
-                [
-                    ("company_ids", "any", [("id", "=", company_id)]),
-                    ("deprecated", "=", False),
-                ],
+                Domain.AND(
+                    [
+                        Domain("company_ids", "any", Domain("id", "=", company_id)),
+                        Domain("active", "=", True),
+                    ]
+                ),
                 ["code"],
             )
         }
@@ -225,7 +228,7 @@ class AccountMoveImport(models.TransientModel):
         journal_speed_dict = {
             journal["code"].upper(): journal["id"]
             for journal in self.env["account.journal"].search_read(
-                [("company_id", "=", company_id)], ["code"]
+                Domain("company_id", "=", company_id), ["code"]
             )
         }
         # analytic account
@@ -234,7 +237,7 @@ class AccountMoveImport(models.TransientModel):
                 analytic_account["code"] or analytic_account["name"]
             ).upper(): analytic_account["id"]
             for analytic_account in self.env["account.analytic.account"].search_read(
-                [("company_id", "=", company_id)], ["code", "name"]
+                Domain("company_id", "=", company_id), ["code", "name"]
             )
         }
         key2label = {

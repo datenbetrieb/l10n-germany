@@ -4,6 +4,7 @@ import logging
 from base64 import b64encode
 
 from odoo import exceptions
+from odoo.fields import Domain
 from odoo.tests import tagged
 from odoo.tools.misc import file_open
 
@@ -25,6 +26,13 @@ class TestDatevImportCsvDtvf(AccountTestInvoicingCommon):
                 "country_id": cls.env.ref("base.de").id,
             }
         )
+        cls.analytic_plan = cls.env["account.analytic.plan"].search(
+            Domain("name", "=", "Internal"), limit=1
+        ) or cls.env["account.analytic.plan"].create(
+            {
+                "name": "Internal",
+            }
+        )
         for code in ("1200",):
             _logger.info(f"create account {code} for test")
             cls.env["account.account"].create(
@@ -40,10 +48,12 @@ class TestDatevImportCsvDtvf(AccountTestInvoicingCommon):
         # ).account_type = "income"
         for code in ("4811",):
             if cls.env["account.analytic.account"].search(
-                [
-                    ("code", "=", code),
-                    ("company_id", "=", cls.env.company.id),
-                ]
+                Domain.AND(
+                    [
+                        Domain("code", "=", code),
+                        Domain("company_id", "=", cls.env.company.id),
+                    ]
+                )
             ):
                 continue
             _logger.info(f"create analytic.account {code} for test")
@@ -51,7 +61,7 @@ class TestDatevImportCsvDtvf(AccountTestInvoicingCommon):
                 {
                     "name": code,
                     "code": code,
-                    "plan_id": cls.env.ref("analytic.analytic_plan_internal").id,
+                    "plan_id": cls.analytic_plan.id,
                 }
             )
 
