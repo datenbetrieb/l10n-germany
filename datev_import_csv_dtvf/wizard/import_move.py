@@ -210,22 +210,67 @@ class AccountMoveImport(models.TransientModel):
                 res.append(vals)
         return res
 
-    def _compute_net_from_gross(self, gross_amount, taxes):
-        """Compute net amount from gross using Odoo's tax engine (total_included mode)."""
-        tax_details = taxes._get_tax_details(
-            price_unit=gross_amount,
-            quantity=1.0,
-            precision_rounding=self.env.company.currency_id.rounding,
-            special_mode="total_included",
-        )
-        net = tax_details["total_excluded"]
+    def _enrich_pivot_with_taxes(self, pivot, acc_tax_dict):
+        """Compute net amounts from gross using Odoo's tax pipeline with round_globally.
+
+        Uses _prepare_base_line_for_taxes_computation + _add_tax_details_in_base_lines
+        + _round_base_lines_tax_details so that rounding redistribution across lines
+        sharing the same tax is handled by Odoo's standard mechanism.
+        """
+        AccountTax = self.env["account.tax"]
+        company = self.env.company
+
+        # Collect base lines for both account and contra_account sides
+        base_line_map = []  # list of (pivot_line, side, taxes, gross)
+        for l in pivot:  # noqa: E741
+            gross = l["debit"] or l["credit"]
+            if not gross:
+                continue
+            acc_taxes = acc_tax_dict.get(l.get("account_id"))
+            if acc_taxes:
+                base_line_map.append((l, "account", acc_taxes, gross))
+            contra_taxes = acc_tax_dict.get(l.get("contra_account_id"))
+            if contra_taxes:
+                base_line_map.append((l, "contra", contra_taxes, gross))
+
+        if not base_line_map:
+            return
+
+        # Build Odoo base lines with special_mode='total_included'
+        base_lines = []
+        for _pivot_line, _side, taxes, gross in base_line_map:
+            bl = AccountTax._prepare_base_line_for_taxes_computation(
+                None,
+                tax_ids=taxes,
+                price_unit=gross,
+                quantity=1.0,
+                special_mode="total_included",
+                currency_id=company.currency_id,
+            )
+            base_lines.append(bl)
+
+        # Compute tax details and apply round_globally redistribution
+        AccountTax._add_tax_details_in_base_lines(base_lines, company)
+        AccountTax._round_base_lines_tax_details(base_lines, company)
+
+        # Write rounded net amounts back to pivot lines.
+        # delta_total_excluded contains the round_globally adjustment.
+        for (pivot_line, side, taxes, _gross), bl in zip(
+            base_line_map, base_lines
+        ):
+            td = bl["tax_details"]
+            net = td["total_excluded"] + td.get("delta_total_excluded", 0.0)
+            if side == "account":
+                pivot_line["tax_ids"] = taxes.ids
+                pivot_line["net_amount"] = net
+            else:
+                pivot_line["contra_tax_ids"] = taxes.ids
+                pivot_line["contra_net_amount"] = net
+
         _logger.debug(
-            "Tax calc: gross=%.2f, net=%.2f, taxes=%s",
-            gross_amount,
-            net,
-            ", ".join(f"{t.name} ({t.amount}%%)" for t in taxes),
+            "Tax enrichment: %d lines enriched via round_globally pipeline",
+            len(base_line_map),
         )
-        return net
 
     def create_moves_from_pivot(self, pivot, post=False):  # noqa: C901
         _logger.debug("Final pivot: %s", pivot)
@@ -370,32 +415,7 @@ class AccountMoveImport(models.TransientModel):
             # test that they don't have both a value
         # ENRICH WITH TAX DATA
         if self.apply_account_taxes:
-            enriched_count = 0
-            skipped_count = 0
-            for l in pivot:  # noqa: E741
-                gross = l["debit"] or l["credit"]
-                # Check account (Konto) for Automatikkonten
-                account_id = l.get("account_id")
-                acc_taxes = acc_tax_dict.get(account_id)
-                if acc_taxes and gross:
-                    net = self._compute_net_from_gross(gross, acc_taxes)
-                    l["tax_ids"] = acc_taxes.ids
-                    l["net_amount"] = net
-                    enriched_count += 1
-                # Check contra_account (Gegenkonto) for Automatikkonten
-                contra_account_id = l.get("contra_account_id")
-                contra_taxes = acc_tax_dict.get(contra_account_id)
-                if contra_taxes and gross:
-                    contra_net = self._compute_net_from_gross(gross, contra_taxes)
-                    l["contra_tax_ids"] = contra_taxes.ids
-                    l["contra_net_amount"] = contra_net
-                    enriched_count += 1
-                if not (acc_taxes or contra_taxes) or not gross:
-                    skipped_count += 1
-            _logger.debug(
-                "Tax enrichment: %d lines with taxes, %d skipped",
-                enriched_count, skipped_count,
-            )
+            self._enrich_pivot_with_taxes(pivot, acc_tax_dict)
         # LIST OF ERRORS
         msg = ""
         for key, label in key2label.items():
