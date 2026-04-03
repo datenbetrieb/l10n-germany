@@ -47,6 +47,12 @@ class AccountMoveImport(models.TransientModel):
         required=True,
         help='Date format is applicable only on Generic csv file ex "%d%m%Y"',
     )
+    apply_account_taxes = fields.Boolean(
+        string="Apply Account Default Taxes",
+        help="If enabled, taxes configured on accounts (Automatikkonten) will be "
+        "applied automatically. The imported amounts are treated as gross "
+        "(tax-included) and will be split into net amount + tax lines.",
+    )
 
     def run_import(self):
         self.ensure_one()
@@ -204,9 +210,27 @@ class AccountMoveImport(models.TransientModel):
                 res.append(vals)
         return res
 
+    def _compute_net_from_gross(self, gross_amount, taxes):
+        """Compute net amount from gross using Odoo's tax engine (total_included mode)."""
+        tax_details = taxes._get_tax_details(
+            price_unit=gross_amount,
+            quantity=1.0,
+            precision_rounding=self.env.company.currency_id.rounding,
+            special_mode="total_included",
+        )
+        net = tax_details["total_excluded"]
+        _logger.debug(
+            "Tax calc: gross=%.2f, net=%.2f, taxes=%s",
+            gross_amount,
+            net,
+            ", ".join(f"{t.name} ({t.amount}%%)" for t in taxes),
+        )
+        return net
+
     def create_moves_from_pivot(self, pivot, post=False):  # noqa: C901
         _logger.debug("Final pivot: %s", pivot)
-        amo = self.env["account.move"].with_context(skip_invoice_sync=True)
+        ctx = {} if self.apply_account_taxes else {"skip_invoice_sync": True}
+        amo = self.env["account.move"].with_context(**ctx)
         company_id = self.env.company.id
         # Generate SPEED DICTS
         # account
@@ -240,6 +264,20 @@ class AccountMoveImport(models.TransientModel):
                 Domain("company_id", "=", company_id), ["code", "name"]
             )
         }
+        # account default taxes (for Automatikkonten)
+        acc_tax_dict = {}
+        if self.apply_account_taxes:
+            for account in self.env["account.account"].search(
+                Domain.AND(
+                    [
+                        Domain("company_ids", "any", Domain("id", "=", company_id)),
+                        Domain("active", "=", True),
+                        Domain("tax_ids", "!=", False),
+                    ]
+                )
+            ):
+                acc_tax_dict[account.id] = account.tax_ids
+            _logger.debug("Loaded %d accounts with default taxes", len(acc_tax_dict))
         key2label = {
             "account": self.env._("account codes"),
             "contra_account": self.env._("contra account codes"),
@@ -330,6 +368,34 @@ class AccountMoveImport(models.TransientModel):
                     "analytic_account_2",
                 )
             # test that they don't have both a value
+        # ENRICH WITH TAX DATA
+        if self.apply_account_taxes:
+            enriched_count = 0
+            skipped_count = 0
+            for l in pivot:  # noqa: E741
+                gross = l["debit"] or l["credit"]
+                # Check account (Konto) for Automatikkonten
+                account_id = l.get("account_id")
+                acc_taxes = acc_tax_dict.get(account_id)
+                if acc_taxes and gross:
+                    net = self._compute_net_from_gross(gross, acc_taxes)
+                    l["tax_ids"] = acc_taxes.ids
+                    l["net_amount"] = net
+                    enriched_count += 1
+                # Check contra_account (Gegenkonto) for Automatikkonten
+                contra_account_id = l.get("contra_account_id")
+                contra_taxes = acc_tax_dict.get(contra_account_id)
+                if contra_taxes and gross:
+                    contra_net = self._compute_net_from_gross(gross, contra_taxes)
+                    l["contra_tax_ids"] = contra_taxes.ids
+                    l["contra_net_amount"] = contra_net
+                    enriched_count += 1
+                if not (acc_taxes or contra_taxes) or not gross:
+                    skipped_count += 1
+            _logger.debug(
+                "Tax enrichment: %d lines with taxes, %d skipped",
+                enriched_count, skipped_count,
+            )
         # LIST OF ERRORS
         msg = ""
         for key, label in key2label.items():
@@ -407,9 +473,10 @@ class AccountMoveImport(models.TransientModel):
                 % cur_balance
             )
         rmoves = self.env["account.move"]
-        for move in moves:
-            rmoves += amo.create(move)
-        _logger.info(f"Account moves IDs {rmoves.ids} created via file import")
+        for i, move in enumerate(moves):
+            created = amo.create(move)
+            rmoves += created
+        _logger.info("Created %d account move(s) (IDs %s) via file import", len(rmoves), rmoves.ids)
         if post:
             rmoves._post()
         return rmoves
@@ -424,15 +491,15 @@ class AccountMoveImport(models.TransientModel):
 
     def _prepare_move_line_01(self, pivot_line, sequence, indicator):
         vals = {}
+        has_taxes = pivot_line.get("tax_ids")
         if indicator == "S":
-            vals.update(
-                {
-                    "credit": 0.0,
-                    "debit": pivot_line["debit"],
-                }
-            )
+            amount = pivot_line["net_amount"] if has_taxes else pivot_line["debit"]
+            vals.update({"credit": 0.0, "debit": amount})
         if indicator == "H":
-            vals.update({"credit": pivot_line["credit"], "debit": 0})
+            amount = pivot_line["net_amount"] if has_taxes else pivot_line["credit"]
+            vals.update({"credit": amount, "debit": 0})
+        if has_taxes:
+            vals["tax_ids"] = [(6, 0, pivot_line["tax_ids"])]
         vals.update(
             {
                 "name": pivot_line["name"],
@@ -460,20 +527,23 @@ class AccountMoveImport(models.TransientModel):
 
     def _prepare_move_line_02(self, pivot_line, sequence, indicator):
         vals = {}
+        has_contra_taxes = pivot_line.get("contra_tax_ids")
         if indicator == "S":
-            vals.update(
-                {
-                    "credit": pivot_line["debit"],
-                    "debit": 0,
-                }
+            amount = (
+                pivot_line["contra_net_amount"]
+                if has_contra_taxes
+                else pivot_line["debit"]
             )
+            vals.update({"credit": amount, "debit": 0})
         if indicator == "H":
-            vals.update(
-                {
-                    "credit": 0,
-                    "debit": pivot_line["credit"],
-                }
+            amount = (
+                pivot_line["contra_net_amount"]
+                if has_contra_taxes
+                else pivot_line["credit"]
             )
+            vals.update({"credit": 0, "debit": amount})
+        if has_contra_taxes:
+            vals["tax_ids"] = [(6, 0, pivot_line["contra_tax_ids"])]
         vals.update(
             {
                 "name": pivot_line["name"],
